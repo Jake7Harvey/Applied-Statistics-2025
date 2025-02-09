@@ -1,0 +1,351 @@
+---
+title: "Mod 0: Hypothesis Testing"
+author: "Jake Harvey"
+date: "2025-02-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(lubridate)
+library(ggplot2)
+library(doParallel)
+library(foreach)
+```
+
+# NYC Crimes 2024
+
+## 1.
+```{r results='markdown'}
+df = read.csv("C:\\Users\\jphar\\OneDrive\\Documents\\APPLIED-STATISTICS\\NYPD_Arrest_Data__Year_to_Date_.csv")
+kable(head(df))
+```
+## 2.
+
+I am using the age range for the qualitative portion. The only issue I have with the age is that it is stored in a range, <18, 18-24, 25-44, 45-64, and 65+. This means that the age range, although they are numbers, are stored as a <chr> data type. It also means that if I covert them to the midpoint of the range that the data will not have that many variables, and would more than likely cause the mean to be somewhere between 25-44. I am going to do three different things for each problem. The first is just run it as it is with the data I am given. The second is to take the midpoint of the ranges. The third is to use a random number generator to pick a number between these age ranges and use it.
+
+Age Range Counter
+```{r Age Range Counter, results='markdown'}
+Age_Range <- df |>
+  filter(!is.na(AGE_GROUP)) |>
+  group_by(AGE_GROUP) |>
+  summarise(Age_Range = n())
+kable(print(Age_Range))
+```
+
+Random Number Generator
+```{r Random Age Generator, results='markdown'}
+numCores <- detectCores() - 1 
+cl <- makeCluster(numCores)
+registerDoParallel(cl)
+
+Generate_Random_Age <- function(Age_Range) {
+  case_when(
+    Age_Range == '<18' ~ sample(15:17, 1),
+    Age_Range == '18-24' ~ sample(18:24, 1),
+    Age_Range == '25-44' ~ sample(25:44, 1),
+    Age_Range == '45-64' ~ sample(45:64, 1),
+    Age_Range == '65+' ~ sample(65:75, 1)
+  )
+}
+
+Random_Ages <- foreach(age_group = df$AGE_GROUP, .combine = c, .packages = 'dplyr') %dopar% {
+  Generate_Random_Age(age_group)
+}
+
+df <- df |> mutate(Random_Ages = Random_Ages)
+
+kable(print(head(df, 10)))
+
+stopCluster(cl)
+```
+
+# A. 
+
+# Mean
+
+As is
+```{r results='markdown'}
+Age_Range_List <- c(43174, 152034, 51121, 4649, 9525)
+
+result.mean <- mean(Age_Range_List)
+kable(print(result.mean))
+```
+Based off of the mean, this data tells me nothing.
+
+Midpoint
+```{r results='markdown'}
+age_ranges <- data.frame(
+  AGE_GROUP = c('<18', '18-24', '25-44', '45-64', '65+'),
+  Midpoint = c(16, 21, 35, 55, 70)
+)
+
+Age_Range <- df |>
+  filter(!is.na(AGE_GROUP)) |>
+  group_by(AGE_GROUP) |>
+  summarise(Age_Range = n())
+
+Age_Range <- Age_Range |>
+  left_join(age_ranges, by = "AGE_GROUP")
+
+weighted_midpoints <- sum(Age_Range$Age_Range * Age_Range$Midpoint)
+
+total_count <- sum(Age_Range$Age_Range)
+
+result.mean <- weighted_midpoints / total_count
+kable(print(result.mean))
+```
+Taking the midpoint gives me a better mean.
+
+Random Ages
+```{r results='markdown'}
+result.mean <- mean(df$Random_Ages, na.rm = FALSE)
+kable(print(result.mean))
+```
+The random ages helps solidify the midpoints mean.
+
+# Standard Deviation
+
+As is
+```{r results='markdown'}
+SD<-sqrt(sum((Age_Range_List-mean(Age_Range_List))^2/(length(Age_Range_List)-1)))
+ 
+kable(print(SD))
+```
+Again, using the ranges does not get me anything.
+
+Midpoint
+```{r results='markdown'}
+SD <- sd(Age_Range$Midpoint, na.rm = FALSE)
+
+kable(print(SD))
+```
+This is a much better standard deviation compared to before, but again using the midpoint does not allow for very much variation.
+
+Random Ages
+```{r results='markdown'}
+SD<-sd(df$Random_Ages, na.rm = FALSE)
+
+kable(print(SD))
+```
+Using the random ages gives me the best standard deviation thus far.
+
+# 5-Number Summary
+
+As is
+```{r results='markdown'}
+FNS <- fivenum(Age_Range$Age_Range)
+
+kable(print(FNS))
+```
+I am just given all 5 quantities of the ranges.
+
+Midpoint
+```{r results='markdown'}
+FNS <- fivenum(Age_Range$Midpoint)
+
+kable(print(FNS))
+```
+Again, I am just given all 5 midpoints.
+
+Random Ages
+```{r results='markdown'}
+FNS <- fivenum(df$Random_Ages)
+
+kable(print(FNS))
+```
+The random ages give me the most variance because it contains all of the ages 15-75.
+
+# Histogram
+
+As is
+```{r}
+h <- ggplot(Age_Range, aes(x = Age_Range)) +
+  geom_histogram(binwidth = 5, fill = "#ff5200", color = "black") +
+  labs(title = "Histogram of Age Ranges", x = "Age Ranges", y = "Frequency") +
+  theme_minimal()
+
+print(h)
+```
+
+This histogram is not good at all, and I should of used a different piece of data.
+
+Midpoint
+```{r}
+h <- ggplot(Age_Range, aes(x = Midpoint)) +
+  geom_histogram(binwidth = 5, fill = "#ff5200", color = "black") +
+  labs(title = "Histogram of Midpoint", x = "Midpoint", y = "Frequency") +
+  theme_minimal()
+
+print(h)
+```
+
+This one is better, but it still has its own issues.
+
+Random Ages
+```{r}
+h <- ggplot(df, aes(x = Random_Ages)) +
+  geom_histogram(binwidth = 5, fill = "#ff5200", color = "black") +
+  labs(title = "Histogram of Random Ages", x = "Random Age", y = "Frequency") +
+  theme_minimal()
+
+print(h)
+```
+
+This histogram shows the rise to the most average age for committing crimes, and also shows its decline over time.
+
+# Box Plot
+
+As is
+```{r}
+b <- ggplot(Age_Range, aes(y = Age_Range)) +
+  geom_boxplot(fill = "#ff5200", color = "black") +
+  labs(title = "Box Plot of Age Range", y = "Age Range") +
+  theme_minimal()
+
+print(b)
+```
+
+This boxplot just shows the ranges.
+
+Midpoint
+```{r}
+b <- ggplot(Age_Range, aes(y = Midpoint)) +
+  geom_boxplot(fill = "#ff5200", color = "black") +
+  labs(title = "Box Plot of Midpoint", y = "Midpoint") +
+  theme_minimal()
+
+print(b)
+```
+
+There is more variance in this one.
+
+Random Ages
+```{r}
+b <- ggplot(df, aes(y = Random_Ages)) +
+  geom_boxplot(fill = "#ff5200", color = "black") +
+  labs(title = "Box Plot of Random Ages", y = "Random Age") +
+  theme_minimal()
+
+print(b)
+```
+
+This one shows the outliers and mean much better than the previous two did.
+
+# QQ Plot
+
+As is
+```{r}
+qq <- ggplot(Age_Range, aes(sample = Age_Range)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "QQ Plot of Age Range", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+print(qq)
+```
+
+The qq line fits as best as it can, but there is one major outlier.
+
+Midpoint
+```{r}
+qq <- ggplot(Age_Range, aes(sample = Midpoint)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "QQ Plot of Midpoint", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+print(qq)
+```
+
+This qq plot shows a much closer connection between the points.
+
+Random Ages
+```{r}
+qq <- ggplot(df, aes(sample = Random_Ages)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "QQ Plot of Random Ages", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+print(qq)
+```
+
+The outliers are shown quickly in this qq plot, and the points are almost all on the line.
+
+# B.
+
+# Frequency
+```{r echo=FALSE, results='markdown'}
+frequency_table <- df |>
+  group_by(PD_DESC) |>
+  summarise(Frequency = n())
+
+kable(head(frequency_table, 10))
+```
+These are the descriptions of the crimes based on the police departments, and how frequent they occurred.
+
+# Relative Frequency
+```{r results='markdown'}
+relative_frequency_table <- df |>
+  group_by(PD_DESC) |>
+  summarise(Frequency = n() / nrow(df)) |>
+  arrange(desc(Frequency))
+
+kable(head(relative_frequency_table, 10))
+```
+The relative frequency tells me that out of all of the crime the most common is Assault 3.
+
+# C.
+```{r results='markdown'}
+two_way_table <- table(df$ARREST_BORO, df$OFNS_DESC)
+
+two_way_df <- as.data.frame.matrix(two_way_table)
+
+kable(print(two_way_df))
+
+proportions <- prop.table(two_way_table, 1)
+
+proportions_df <- as.data.frame.matrix(proportions)
+
+kable(print(proportions_df))
+```
+Assuming that the names of the boroughs are B for Bronx, K for Brooklyn, M for Manhattan, Q for Queens, and S for Staten Island, and going off of the categories of the crimes that were committed there is some relations to be made between them and the types of crimes. For the majority of the crimes there is a pretty even range across all 5 boroughs based on the area that they cover and the category that crime falls into. However, when it comes to the amount of crimes committed it is almost always true that there are less crimes committed in Staten Islands boroughs then in any other borough. 
+
+# 3
+
+# A.
+
+H0: Using the mean of the Random_Ages data is equal to 36.
+
+H1: Using the mean of the Random_Ages data is not equal to 36.
+```{r}
+fixed_value <- 36
+
+t_test_result <- t.test(df$Random_Ages, mu = fixed_value, alternative = "two.sided")
+
+print(t_test_result)
+```
+# B.
+
+H0: The means of the Bronx and Staten Island when using Random_Ages is equal.
+
+H1: The means of the Bronx and Staten Island when using Random_Ages is not equal.
+```{r}
+group1 <- df |> filter(ARREST_BORO == 'B') |> select(Random_Ages)
+group2 <- df |> filter(ARREST_BORO == 'S') |> select(Random_Ages)
+
+t_test_result <- t.test(group1$Random_Ages, group2$Random_Ages, alternative = "two.sided")
+
+print(t_test_result)
+```
+# 4.
+
+My data set is all of the arrests made in 2024 in New York City. The information that is provided by the data set contains everything regarding the arrests up to who the person was. Crimes, categories of crime, dates, and arresting boroughs are just some parts of this data set. The age range of the suspect is a big part of this data set as well as the arresting boroughs. I found the data set on data.gov.
+
+Link: https://catalog.data.gov/dataset/nypd-arrest-data-year-to-date
+
+
+The conclusion that I have made based on the results of the test is that the average age of the suspect who was arrested is just over 36. The ages I was given are in ranges, so it is only a guess based off of the random age generator. If there were a couple of more details provided by the data set I could probably prove or disprove this assumption. There is a lot that can be done with this data set, predictive readings on crimes in certain locations during certain times of the year just being one example. I would love to work with this data set going on to the future!  
