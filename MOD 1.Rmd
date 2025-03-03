@@ -1,0 +1,226 @@
+---
+title: "Project.Part.1.AS"
+author: "Jake Harvey"
+date: "2025-03-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(lubridate)
+library(ggplot2)
+library(doParallel)
+library(foreach)
+```
+
+# NYC Crimes 2024
+
+# 1.
+```{r echo = FALSE, results='markdown'}
+df = read.csv("C:\\Users\\jphar\\OneDrive\\Documents\\APPLIED-STATISTICS\\NYPD_Arrest_Data__Year_to_Date_.csv")
+kable(head(df))
+```
+
+# 2.
+
+Link to previous assignment: https://jake7harvey.github.io/Applied-Statistics-2025/MOD-0.html
+
+Random Number Generator
+
+```{r Random Age Generator, results='markdown'}
+numCores <- detectCores() - 1 
+cl <- makeCluster(numCores)
+registerDoParallel(cl)
+
+Generate_Random_Age <- function(Age_Range) {
+  case_when(
+    Age_Range == '<18' ~ sample(15:17, 1),
+    Age_Range == '18-24' ~ sample(18:24, 1),
+    Age_Range == '25-44' ~ sample(25:44, 1),
+    Age_Range == '45-64' ~ sample(45:64, 1),
+    Age_Range == '65+' ~ sample(65:75, 1)
+  )
+}
+
+Random_Ages <- foreach(age_group = df$AGE_GROUP, .combine = c, .packages = 'dplyr') %dopar% {
+  Generate_Random_Age(age_group)
+}
+
+df <- df |> mutate(Random_Ages = Random_Ages)
+
+stopCluster(cl)
+```
+
+I am also going to divide the ages into their respective police borough just to have a more visually apealing graph and data set. It will also help with predictions down the line.
+
+```{r}
+manhattan <- subset(df, ARREST_BORO == "M")
+bronx <- subset(df, ARREST_BORO == "B")
+brooklyn <- subset(df, ARREST_BORO == "K")
+queens <- subset(df, ARREST_BORO == "Q")
+staten_island <- subset(df, ARREST_BORO == "S")
+
+```
+
+# 3.
+
+## A.
+
+I am going to do a random sample of the whole df just to make it more readable.
+
+```{r echo = FALSE}
+random_sample <- df[sample(nrow(df), 250), ]
+
+ggplot(random_sample, aes(x = Random_Ages, y = ARREST_PRECINCT)) +
+  geom_point(color = "#ff5200", size = 3) +  
+  labs(
+    title = "Scatter Plot of Random Sample: Arrest Precinct vs Random Ages",
+    x = "Random Ages",
+    y = "Arrest Precinct"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+correlation <- cor(random_sample$Random_Ages, random_sample$ARREST_PRECINCT)
+cat("Correlation between Random Ages and Arrest Precinct: ", correlation, "\n")
+
+random.model <- lm(ARREST_PRECINCT ~ Random_Ages, data = random_sample)
+
+summary(random.model)
+```
+
+The correlation here is nonexistant. I was thinking that there may be a certain precinct that gets more of a certain age group, but I was mistaken.
+
+Here is the graph of the whole dataset.
+
+```{r echo = FALSE}
+
+ggplot(df, aes(x = Random_Ages, y = ARREST_PRECINCT)) +
+  geom_point(color = "#ff5200", size = 3) +  
+  labs(
+    title = "Scatter Plot of df: Arrest Precinct vs Random Ages",
+    x = "Random Ages",
+    y = "Arrest Precinct"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+correlation <- cor(df$Random_Ages, df$ARREST_PRECINCT)
+cat("Correlation between Random Ages and Arrest Precinct: ", correlation, "\n")
+
+whole.model <- lm(ARREST_PRECINCT ~ Random_Ages, data = df)
+
+summary(whole.model)
+```
+
+Well there are a few outliers, I wasn't expecting that, but there is still no correlation.
+
+## B.
+
+```{r}
+coeff <- coef(whole.model)
+cat("Slope (b1): ", coeff[2], "\n")
+
+new_data <- data.frame(Random_Ages = 22)
+predicted <- predict(whole.model, new_data, interval = "confidence")
+cat("Predicted Arrest Precinct: ", predicted, "\n")
+
+actual <- 65 
+residual <- actual - predicted[1]
+cat("Residual: ", residual, "\n")
+```
+
+A lot of this is still new to me, and it did take me some outside help to get this to run like I wanted it to, but by looking at this the slope for 22 year olds who get arrested, as the precinct number goes up the slope gradually decreases. The prediction for the precinct is 65, which is a little more than just 1 away.
+
+## C.
+
+```{r echo = FALSE}
+cor_test <- cor.test(df$Random_Ages, df$ARREST_PRECINCT)
+print(cor_test)
+```
+
+I should not be shocked at this point. There is no correlation between the ages and the arrest precinct. With such a low p-value, the null hypothesis should also be rejected.
+
+## D.
+
+```{r echo = FALSE}
+
+subset_model <- lm(ARREST_PRECINCT ~ Random_Ages, data = staten_island)
+
+ggplot(df, aes(x = Random_Ages, y = ARREST_PRECINCT)) +
+  geom_point(color = "#ff5200", size = 2, alpha = 0.5) +
+  geom_smooth(method = "lm", color = "black", se = FALSE, size = 1) +  
+  geom_smooth(data = staten_island, aes(x = Random_Ages, y = ARREST_PRECINCT),
+              method = "lm", color = "green", se = FALSE, size = 1) +  
+  labs(
+    title = "Regression: Full Data vs Staten Island Subset",
+    x = "Random Ages",
+    y = "Arrest Precinct"
+  ) +
+  theme_minimal()
+```
+
+Staten Island tends to lie on one of the higher number precincts. Restricting the data might change the graph, but only so many precincts lie within each district, which in turn would skew certain regressions to one side or the other.
+
+## E.
+
+```{r echo = FALSE}
+multi_model <- lm(ARREST_PRECINCT ~ Random_Ages + PERP_SEX, data = df)
+summary(multi_model)
+
+new_point <- data.frame(Random_Ages = 24, PERP_SEX = "M")  
+
+multi_pred <- predict(multi_model, newdata = new_point)
+cat("Predicted Arrest Precinct: ", multi_pred, "\n")
+```
+
+There is no true correlation with age, sex, and precincts in this data. With what is given, a low prediction level is assumed. 
+
+Just out of curiosity, I am going to try the same thing with my random sample data.
+
+```{r echo = FALSE}
+multi_model <- lm(ARREST_PRECINCT ~ Random_Ages + PERP_SEX, data = random_sample)
+summary(multi_model)
+
+new_point <- data.frame(Random_Ages = 24, PERP_SEX = "M")  
+
+multi_pred <- predict(multi_model, newdata = new_point)
+cat("Predicted Arrest Precinct: ", multi_pred, "\n")
+```
+
+The results are nearly the same.
+
+## F.
+
+```{r echo = FALSE}
+ggplot(data = data.frame(fitted = fitted(whole.model), residuals = resid(whole.model)),
+       aes(x = fitted, y = residuals)) +
+  geom_point(color = "#ff5200", size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Residual Plot",
+    x = "Fitted Values",
+    y = "Residuals"
+  ) +
+  theme_minimal()
+```
+
+```{r echo = FALSE}
+qqnorm(resid(multi_model), main = "Normal Q-Q Plot")
+qqline(resid(multi_model), col = "#ff5200", lwd = 2)
+```
+
+My residual plot looks kinda like a boxplot, and I am sure it is not supposed to do that. After doing some research into it, it could mean that the residuals are close to zero which would make the predictions somewhat accurate. The QQ plot actually isn't that bad looking, even though there are plenty of points away from the line. The points are somewhat normally distributed.
+
+# 4.
+
+My data set is all of the arrests made in 2024 in New York City. The information that is provided by the data set contains everything regarding the arrests up to who the person was. Crimes, categories of crime, dates, and arresting boroughs are just some parts of this data set. The age range of the suspect is a big part of this data set as well as the arresting boroughs. I found the data set on data.gov.
+
+Link: https://catalog.data.gov/dataset/nypd-arrest-data-year-to-date
+
+The conclusion that I can draw from this assignment is that correlations between age and where you are arrested have virtualy no relation. Throughout that point kept being proven. One thing that might have correlation could be the type of crime commited and age. This would tell us the most popular crime for certain ages to commit, and possibly predict it. Overall, I am satisfied with the work, even though some of it is ugly and looks like someone threw up. Not to mention I did have to look some things up to get them to work, but it is fine.
+
