@@ -1,0 +1,126 @@
+---
+title: "Bootstrap and Cross Validation"
+author: "Jake Harvey"
+date: "2025-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(foreach)
+library(doParallel)
+library(ggplot2)
+```
+
+# Bootstrap
+
+```{r}
+summary(diamonds)
+```
+
+## Question 1:
+
+A quick google search suggested that I should purchase a 1 carat diamond as an engagement ring. Using bootstrapping, test the hypothesis that the mean is 1 carat. Explain in words how to create a bootstrap and how to create a bootstrap distribution for the mean. Make sure to state the hypothesis, express a confidence interval, pvalue, and state the conclusion in the proper statistical terms for the mean.
+
+```{r}
+data("diamonds")
+diamonds <- diamonds |> select(carat)
+
+observed_mean <- mean(diamonds$carat)  
+trials <- 10000  
+
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+set.seed(7) 
+bootstrap_means <- foreach(i = 1:trials, .combine = c, .packages = "tidyverse") %dopar% {
+  sample_data <- diamonds |> sample_frac(1, replace = TRUE)
+  mean(sample_data$carat)
+}
+
+stopCluster(cl)  
+
+ci <- quantile(bootstrap_means, c(0.025, 0.975))
+
+p_value <- mean(abs(bootstrap_means - 1) >= abs(observed_mean - 1))
+
+cat("Observed Mean:", observed_mean, "\n")
+cat("95% Confidence Interval:", ci, "\n")
+cat("P-value:", p_value, "\n")
+
+if (p_value <= 0.05) {
+  cat("Conclusion: Reject the null hypothesis. The mean is significantly different from 1 carat.\n")
+} else {
+  cat("Conclusion: Fail to reject the null hypothesis. No significant difference from 1 carat.\n")
+}
+```
+
+## Written Response
+
+The way to check to see if the mean carat weight is 1, is by bootstraping. I use a resampling method that also estimates the sampling distribution of the mean. First I set the data for diamonds, and I run 10000 trials with the carat column. I also run it in parallel just to make it easier on my pc. Each trial that is ran creates a resampled dataset with replacement that calculates mean carrat weight. Using a 95% confidence interval and getting the p-value allows me to tell if the null hypothesis is rejected or not. Based off of the results, the null was failed to be rejected and the mean is actually closer to .8 instead of 1. 
+
+
+# Cross Validation
+
+```{r}
+data("diamonds")
+
+fit <- lm(price ~ carat +depth + table, data = diamonds)
+summary(fit)
+```
+
+## Question 2:
+
+Repeat this linear model using 10 fold cross validation. Explain in words what you are doing. Examine one of the folds carefully explaining the steps involved. Examine the R2 value and residual mean standard error. Compare the values you get to the original model.
+
+```{r}
+data("diamonds")
+
+set.seed(7)
+diamonds <- diamonds[sample(nrow(diamonds)), ] 
+
+folds <- cut(seq(1, nrow(diamonds)), breaks = 10, labels = FALSE)
+
+r2_values <- c()
+rmse_values <- c()
+
+for (i in 1:10) {
+  test_indices <- which(folds == i, arr.ind = TRUE)
+  test_data <- diamonds[test_indices, ]
+  train_data <- diamonds[-test_indices, ]
+
+  model <- lm(price ~ carat + depth + table, data = train_data)
+  
+  predictions <- predict(model, newdata = test_data)
+  
+  r_squared <- cor(test_data$price, predictions)^2
+  r2_values <- c(r2_values, r_squared)
+  
+  residuals <- test_data$price - predictions
+  rmse <- sqrt(mean(residuals^2))
+  rmse_values <- c(rmse_values, rmse)
+}
+
+mean_r2 <- mean(r2_values)
+mean_rmse <- mean(rmse_values)
+
+cat("10-Fold Cross-Validation Results:\n")
+cat("Mean R^2:", mean_r2, "\n")
+cat("Mean RMSE:", mean_rmse, "\n")
+```
+
+## Written Response
+
+The way that cross validation works is it takes 90% of the data and tests it on 10% of the remaining data. After doing some looking online, I found a way to cross validate for the 10 folds. Using the diamonds dataset, I want to find the r2 and rmse values. The main thing I want to do is compare to what I already know, and make sure that it is correct. The for loop makes sure that each fold is ran through and tested, and the test_indices is how I do that by making sure which rows belong in the test set during each itteration. They are used to train the model by testing it. The results that I get are almost the same as the given answers.
+
+
+
+
+
+
+
+
+
+
+
