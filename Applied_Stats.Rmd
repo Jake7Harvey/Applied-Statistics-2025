@@ -1,0 +1,529 @@
+---
+title: "Applied_Stats"
+author: "Jake Harvey"
+date: "2025-02-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(lubridate)
+library(ggplot2)
+library(doParallel)
+library(foreach)
+```
+
+# NYC Crimes 2024
+
+# Mod 0
+
+## 1.
+```{r results='markdown'}
+df = read.csv("C:\\Users\\jphar\\OneDrive\\Documents\\Dr. Jacobs\\APPLIED-STATISTICS\\NYPD_Arrest_Data__Year_to_Date_.csv")
+kable(head(df))
+```
+## 2.
+
+I am using the age range for the qualitative portion. The only issue I have with the age is that it is stored in a range, <18, 18-24, 25-44, 45-64, and 65+. This means that the age range, although they are numbers, are stored as a <chr> data type. It also means that if I covert them to the midpoint of the range that the data will not have that many variables, and would more than likely cause the mean to be somewhere between 25-44. I am going to do three different things for each problem. The first is just run it as it is with the data I am given. The second is to take the midpoint of the ranges. The third is to use a random number generator to pick a number between these age ranges and use it.
+
+Age Range Counter
+```{r Age Range Counter, results='markdown'}
+Age_Range <- df |>
+  filter(!is.na(AGE_GROUP)) |>
+  group_by(AGE_GROUP) |>
+  summarise(Age_Range = n())
+kable(print(Age_Range))
+```
+
+Random Number Generator
+```{r Random Age Generator, results='markdown'}
+numCores <- detectCores() - 1 
+cl <- makeCluster(numCores)
+registerDoParallel(cl)
+
+Generate_Random_Age <- function(Age_Range) {
+  case_when(
+    Age_Range == '<18' ~ sample(15:17, 1),
+    Age_Range == '18-24' ~ sample(18:24, 1),
+    Age_Range == '25-44' ~ sample(25:44, 1),
+    Age_Range == '45-64' ~ sample(45:64, 1),
+    Age_Range == '65+' ~ sample(65:75, 1)
+  )
+}
+
+Random_Ages <- foreach(age_group = df$AGE_GROUP, .combine = c, .packages = 'dplyr') %dopar% {
+  Generate_Random_Age(age_group)
+}
+
+df <- df |> mutate(Random_Ages = Random_Ages)
+
+kable(print(head(df, 10)))
+
+stopCluster(cl)
+```
+
+# A. 
+
+# Mean
+
+As is
+```{r results='markdown'}
+Age_Range_List <- c(43174, 152034, 51121, 4649, 9525)
+
+result.mean <- mean(Age_Range_List)
+kable(print(result.mean))
+```
+Based off of the mean, this data tells me nothing.
+
+Midpoint
+```{r results='markdown'}
+age_ranges <- data.frame(
+  AGE_GROUP = c('<18', '18-24', '25-44', '45-64', '65+'),
+  Midpoint = c(16, 21, 35, 55, 70)
+)
+
+Age_Range <- df |>
+  filter(!is.na(AGE_GROUP)) |>
+  group_by(AGE_GROUP) |>
+  summarise(Age_Range = n())
+
+Age_Range <- Age_Range |>
+  left_join(age_ranges, by = "AGE_GROUP")
+
+weighted_midpoints <- sum(Age_Range$Age_Range * Age_Range$Midpoint)
+
+total_count <- sum(Age_Range$Age_Range)
+
+result.mean <- weighted_midpoints / total_count
+kable(print(result.mean))
+```
+Taking the midpoint gives me a better mean.
+
+Random Ages
+```{r results='markdown'}
+result.mean <- mean(df$Random_Ages, na.rm = FALSE)
+kable(print(result.mean))
+```
+The random ages helps solidify the midpoints mean.
+
+# Standard Deviation
+
+As is
+```{r results='markdown'}
+SD<-sqrt(sum((Age_Range_List-mean(Age_Range_List))^2/(length(Age_Range_List)-1)))
+ 
+kable(print(SD))
+```
+Again, using the ranges does not get me anything.
+
+Midpoint
+```{r results='markdown'}
+SD <- sd(Age_Range$Midpoint, na.rm = FALSE)
+
+kable(print(SD))
+```
+This is a much better standard deviation compared to before, but again using the midpoint does not allow for very much variation.
+
+Random Ages
+```{r results='markdown'}
+SD<-sd(df$Random_Ages, na.rm = FALSE)
+
+kable(print(SD))
+```
+Using the random ages gives me the best standard deviation thus far.
+
+# 5-Number Summary
+
+As is
+```{r results='markdown'}
+FNS <- fivenum(Age_Range$Age_Range)
+
+kable(print(FNS))
+```
+I am just given all 5 quantities of the ranges.
+
+Midpoint
+```{r results='markdown'}
+FNS <- fivenum(Age_Range$Midpoint)
+
+kable(print(FNS))
+```
+Again, I am just given all 5 midpoints.
+
+Random Ages
+```{r results='markdown'}
+FNS <- fivenum(df$Random_Ages)
+
+kable(print(FNS))
+```
+The random ages give me the most variance because it contains all of the ages 15-75.
+
+# Histogram
+
+As is
+```{r}
+h <- ggplot(Age_Range, aes(x = Age_Range)) +
+  geom_histogram(binwidth = 5, fill = "#ff5200", color = "black") +
+  labs(title = "Histogram of Age Ranges", x = "Age Ranges", y = "Frequency") +
+  theme_minimal()
+
+print(h)
+```
+
+This histogram is not good at all, and I should of used a different piece of data.
+
+Midpoint
+```{r}
+h <- ggplot(Age_Range, aes(x = Midpoint)) +
+  geom_histogram(binwidth = 5, fill = "#ff5200", color = "black") +
+  labs(title = "Histogram of Midpoint", x = "Midpoint", y = "Frequency") +
+  theme_minimal()
+
+print(h)
+```
+
+This one is better, but it still has its own issues.
+
+Random Ages
+```{r}
+h <- ggplot(df, aes(x = Random_Ages)) +
+  geom_histogram(binwidth = 5, fill = "#ff5200", color = "black") +
+  labs(title = "Histogram of Random Ages", x = "Random Age", y = "Frequency") +
+  theme_minimal()
+
+print(h)
+```
+
+This histogram shows the rise to the most average age for committing crimes, and also shows its decline over time.
+
+# Box Plot
+
+As is
+```{r}
+b <- ggplot(Age_Range, aes(y = Age_Range)) +
+  geom_boxplot(fill = "#ff5200", color = "black") +
+  labs(title = "Box Plot of Age Range", y = "Age Range") +
+  theme_minimal()
+
+print(b)
+```
+
+This boxplot just shows the ranges.
+
+Midpoint
+```{r}
+b <- ggplot(Age_Range, aes(y = Midpoint)) +
+  geom_boxplot(fill = "#ff5200", color = "black") +
+  labs(title = "Box Plot of Midpoint", y = "Midpoint") +
+  theme_minimal()
+
+print(b)
+```
+
+There is more variance in this one.
+
+Random Ages
+```{r}
+b <- ggplot(df, aes(y = Random_Ages)) +
+  geom_boxplot(fill = "#ff5200", color = "black") +
+  labs(title = "Box Plot of Random Ages", y = "Random Age") +
+  theme_minimal()
+
+print(b)
+```
+
+This one shows the outliers and mean much better than the previous two did.
+
+# QQ Plot
+
+As is
+```{r}
+qq <- ggplot(Age_Range, aes(sample = Age_Range)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "QQ Plot of Age Range", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+print(qq)
+```
+
+The qq line fits as best as it can, but there is one major outlier.
+
+Midpoint
+```{r}
+qq <- ggplot(Age_Range, aes(sample = Midpoint)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "QQ Plot of Midpoint", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+print(qq)
+```
+
+This qq plot shows a much closer connection between the points.
+
+Random Ages
+```{r}
+qq <- ggplot(df, aes(sample = Random_Ages)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "QQ Plot of Random Ages", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+print(qq)
+```
+
+The outliers are shown quickly in this qq plot, and the points are almost all on the line.
+
+# B.
+
+# Frequency
+```{r echo=FALSE, results='markdown'}
+frequency_table <- df |>
+  group_by(PD_DESC) |>
+  summarise(Frequency = n())
+
+kable(head(frequency_table, 10))
+```
+These are the descriptions of the crimes based on the police departments, and how frequent they occurred.
+
+# Relative Frequency
+```{r results='markdown'}
+relative_frequency_table <- df |>
+  group_by(PD_DESC) |>
+  summarise(Frequency = n() / nrow(df)) |>
+  arrange(desc(Frequency))
+
+kable(head(relative_frequency_table, 10))
+```
+The relative frequency tells me that out of all of the crime the most common is Assault 3.
+
+# C.
+```{r results='markdown'}
+two_way_table <- table(df$ARREST_BORO, df$OFNS_DESC)
+
+two_way_df <- as.data.frame.matrix(two_way_table)
+
+kable(print(two_way_df))
+
+proportions <- prop.table(two_way_table, 1)
+
+proportions_df <- as.data.frame.matrix(proportions)
+
+kable(print(proportions_df))
+```
+Assuming that the names of the boroughs are B for Bronx, K for Brooklyn, M for Manhattan, Q for Queens, and S for Staten Island, and going off of the categories of the crimes that were committed there is some relations to be made between them and the types of crimes. For the majority of the crimes there is a pretty even range across all 5 boroughs based on the area that they cover and the category that crime falls into. However, when it comes to the amount of crimes committed it is almost always true that there are less crimes committed in Staten Islands boroughs then in any other borough. 
+
+# 3
+
+# A.
+
+H0: Using the mean of the Random_Ages data is equal to 36.
+
+H1: Using the mean of the Random_Ages data is not equal to 36.
+```{r}
+fixed_value <- 36
+
+t_test_result <- t.test(df$Random_Ages, mu = fixed_value, alternative = "two.sided")
+
+print(t_test_result)
+```
+# B.
+
+H0: The means of the Bronx and Staten Island when using Random_Ages is equal.
+
+H1: The means of the Bronx and Staten Island when using Random_Ages is not equal.
+```{r}
+group1 <- df |> filter(ARREST_BORO == 'B') |> select(Random_Ages)
+group2 <- df |> filter(ARREST_BORO == 'S') |> select(Random_Ages)
+
+t_test_result <- t.test(group1$Random_Ages, group2$Random_Ages, alternative = "two.sided")
+
+print(t_test_result)
+```
+# 4.
+
+My data set is all of the arrests made in 2024 in New York City. The information that is provided by the data set contains everything regarding the arrests up to who the person was. Crimes, categories of crime, dates, and arresting boroughs are just some parts of this data set. The age range of the suspect is a big part of this data set as well as the arresting boroughs. I found the data set on data.gov.
+
+Link: https://catalog.data.gov/dataset/nypd-arrest-data-year-to-date
+
+
+The conclusion that I have made based on the results of the test is that the average age of the suspect who was arrested is just over 36. The ages I was given are in ranges, so it is only a guess based off of the random age generator. If there were a couple of more details provided by the data set I could probably prove or disprove this assumption. There is a lot that can be done with this data set, predictive readings on crimes in certain locations during certain times of the year just being one example. I would love to work with this data set going on to the future!  
+
+
+# Mod 2
+
+## 2. Bootstrapping
+
+## A. 
+
+```{r}
+num_cores <- detectCores() - 1  
+cl <- makeCluster(num_cores)   
+registerDoParallel(cl)
+
+set.seed(7)
+
+group1 <- df |> filter(ARREST_BORO == 'B') |> select(Random_Ages) |> pull()
+group2 <- df |> filter(ARREST_BORO == 'S') |> select(Random_Ages) |> pull()
+
+observed_difference <- mean(group1) - mean(group2)
+
+combined_data <- c(group1, group2)
+n_group1 <- length(group1)
+n_group2 <- length(group2)
+
+num_bootstrap <- 10000  
+bootstrap_differences <- numeric(num_bootstrap) 
+
+for (i in 1:num_bootstrap) {
+  resampled_group1 <- sample(combined_data, n_group1, replace = TRUE)
+  resampled_group2 <- sample(combined_data, n_group2, replace = TRUE)
+
+  bootstrap_differences[i] <- mean(resampled_group1) - mean(resampled_group2)
+}
+
+p_value <- mean(abs(bootstrap_differences) >= abs(observed_difference)) 
+
+print(paste("Observed Difference in Means:", observed_difference))
+print(paste("Bootstrap p-value:", p_value))
+
+stopCluster(cl)
+```
+
+I used pretty much the same code from the bootstrapping and cross validation assignment. Comparing the two test, T-Test and Bootstrapping, the difference in means and p-values are almost the same. Both means are -1.0629902, and the p-values are either 0 or as close as they can get to them. This means that the null hypothesis is rejected.
+
+## B.
+
+H0: The median of the Random_Ages column is 28.
+
+H1: The median of the Random_Ages column is not 28.
+
+```{r}
+num_cores <- detectCores() - 1  
+cl <- makeCluster(num_cores)  
+registerDoParallel(cl)        
+
+set.seed(7)  
+observed_median <- median(df$Random_Ages)
+
+num_bootstrap <- 10000
+bootstrap_medians <- foreach(i = 1:num_bootstrap, .combine = c, .packages = "base") %dopar% {
+  resampled_data <- sample(df$Random_Ages, replace = TRUE)  
+  median(resampled_data) 
+}
+
+ci <- quantile(bootstrap_medians, c(0.025, 0.975))
+print(paste("Bootstrap Confidence Interval for Median:", paste(ci, collapse = " to ")))
+
+null_median <- 28 
+p_value <- mean(abs(bootstrap_medians - null_median) >= abs(observed_median - null_median))
+print(paste("Observed Median:", observed_median))
+print(paste("Bootstrap p-value:", p_value))
+
+stopCluster(cl)
+```
+
+The null hypothesis is failed to be rejected, because the p-value is equal to 1. This means the 28 is not the median, but instead 35 is. My theory failed, however I was successful in finding the true median.
+
+## 3. Cross Validation
+
+## A.
+
+```{r}
+set.seed(7)  
+n <- nrow(df)
+train_indices <- sample(1:n, size = floor(2/3 * n)) 
+train_data <- df[train_indices, ]
+test_data <- df[-train_indices, ]
+
+lm_model <- lm(Random_Ages ~ PERP_RACE, data = train_data) 
+print(summary(lm_model))
+
+predictions <- predict(lm_model, newdata = test_data)
+
+residuals <- test_data$Random_Ages - predictions
+
+r_squared <- 1 - sum(residuals^2) / sum((test_data$Random_Ages - mean(test_data$Random_Ages))^2)
+
+rmse <- sqrt(mean(residuals^2))
+
+print(paste("R^2:", r_squared))
+print(paste("RMSE:", rmse))
+
+conf_intervals <- confint(lm_model)
+print("Confidence Intervals for Regression Coefficients:")
+print(conf_intervals)
+
+ggplot() +
+  geom_point(data = train_data, aes(x = PERP_RACE, y = Random_Ages), color = "blue", alpha = 0.7) +
+  geom_point(data = test_data, aes(x = PERP_RACE, y = Random_Ages), color = "red", alpha = 0.7) +
+  geom_smooth(data = train_data, aes(x = as.numeric(PERP_RACE), y = Random_Ages), method = "lm", se = FALSE, color = "black") +
+  labs(title = "Scatterplot of Training and Testing Data with Regression Line",
+       x = "Race",
+       y = "Random Ages") +
+  theme_minimal()
+```
+
+On here I used race and random age to make the cross validation. The graph does not look the best, but the data does make a connection with PERP_RACEWHITE and Random_Ages. The p-value is very low, and it has a estimated standard error of 3.9. This is the largest of all the test cases. The confidence interval is also the largest at a 2.83 - 4.98.
+
+## B.
+
+```{r}
+num_cores <- detectCores() - 1 
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+set.seed(7)
+data <- df 
+folds <- cut(seq(1, nrow(data)), breaks = 10, labels = FALSE)
+
+r2_values <- c()
+rmse_values <- c()
+lower_ci_values <- c()
+upper_ci_values <- c()
+
+cv_results <- foreach(i = 1:10, .combine = rbind, .packages = c("stats")) %dopar% {
+
+  test_indices <- which(folds == i, arr.ind = TRUE)
+  test_data <- data[test_indices, ]
+  train_data <- data[-test_indices, ]
+
+  model <- lm(Random_Ages ~ PERP_RACE, data = train_data)
+  
+  predictions <- predict(model, newdata = test_data)
+  
+  r_squared <- cor(test_data$Random_Ages, predictions)^2
+  
+  residuals <- test_data$Random_Ages - predictions
+  rmse <- sqrt(mean(residuals^2))
+  
+  conf_intervals <- confint(model)
+  lower_ci <- conf_intervals["PERP_RACEWHITE", 1]
+  upper_ci <- conf_intervals["PERP_RACEWHITE", 2]
+  
+  c(Fold = i, R_Squared = r_squared, RMSE = rmse, Lower_CI = lower_ci, Upper_CI = upper_ci)
+}
+
+cv_results <- as.data.frame(cv_results)
+
+mean_r2 <- mean(cv_results$R_Squared)
+mean_rmse <- mean(cv_results$RMSE)
+mean_ci_lower <- mean(cv_results$Lower_CI)
+mean_ci_upper <- mean(cv_results$Upper_CI)
+
+print(paste("10-Fold Cross-Validation Results (Parallel): "))
+print(paste("Mean R^2:", mean_r2, " "))
+print(paste("Mean RMSE:", mean_rmse, " "))
+print(paste("Mean Confidence Interval for PERP_RACEWHITE:", mean_ci_lower, "to", mean_ci_upper, " "))
+
+stopCluster(cl)
+```
+
+Based off of the previous questions results, I used PERP_RACEWHITE to control the confidence intervals. The results that I gathered by doing that only further solidify it. The mean R^2, 0.01087, is very small which means that race alone is not a good predictor. The mean RMSE is 12.8767, shows that there is almost 13 years in variance that backs the previous. The confidence interval, as previously stated, backs up the fact that the PERP_RACEWHITE is constantly giving this result which backs the models stability. 
+
+
+
+
